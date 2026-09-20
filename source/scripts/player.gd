@@ -7,6 +7,9 @@ var hp: float = 100.0
 @export var walk_speed: float = 5.0
 @export var jump_velocity: float = 4.5
 @export var look_sens: float = 0.0025
+# Thumb drags cover far fewer pixels than a mouse, so touch look gets its
+# own, higher sensitivity.
+@export var touch_look_sens: float = 0.005
 var touch_move: Vector2 = Vector2.ZERO
 var touch_firing: bool = false
 const GRAVITY: float = 20.0
@@ -23,6 +26,9 @@ func take_damage(amount: float) -> void:
 		return
 	hp = maxf(0.0, hp - amount)
 	health_changed.emit(hp, max_hp)
+	var sfx: Node = get_tree().get_first_node_in_group("sfx")
+	if sfx != null and sfx.has_method("play"):
+		sfx.play("hurt", -6.0, randf_range(0.9, 1.1))
 	if hp <= 0.0:
 		_dead = true
 		died.emit()
@@ -31,8 +37,10 @@ func is_dead() -> bool:
 func apply_touch_move(vec: Vector2) -> void:
 	touch_move = vec.limit_length(1.0)
 func apply_touch_look(delta: Vector2) -> void:
-	_yaw -= delta.x * look_sens
-	_pitch = clampf(_pitch - delta.y * look_sens, deg_to_rad(-PITCH_LIMIT), deg_to_rad(PITCH_LIMIT))
+	_apply_look(delta, touch_look_sens)
+func _apply_look(delta: Vector2, sens: float) -> void:
+	_yaw -= delta.x * sens
+	_pitch = clampf(_pitch - delta.y * sens, deg_to_rad(-PITCH_LIMIT), deg_to_rad(PITCH_LIMIT))
 	rotation.y = _yaw
 	head.rotation.x = _pitch
 func set_touch_firing(pressed: bool) -> void:
@@ -51,7 +59,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			var mm := event as InputEventMouseMotion
-			apply_touch_look(mm.relative)
+			_apply_look(mm.relative, look_sens)
 func _hud_input_locked() -> bool:
 	var hud: Node = get_tree().get_first_node_in_group("hud")
 	return hud != null and bool(hud.get("input_locked"))

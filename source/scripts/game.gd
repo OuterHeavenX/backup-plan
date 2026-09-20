@@ -26,14 +26,53 @@ var _game_over: bool = false
 var _portal_mat: StandardMaterial3D = null
 var _torch_lights: Array[OmniLight3D] = []
 var _time: float = 0.0
+# Persists across scene reloads (script-level state), so the story card is
+# only shown the first time the level starts in a session.
+static var story_shown: bool = false
 func _ready() -> void:
 	_build_environment()
+	_build_sfx()
 	_build_level()
 	_spawn_player_and_hud()
 	_build_zones()
 	_build_gate()
-	_hud.show_story(STORY_TEXT)
+	_build_navigation()
+	if not story_shown:
+		story_shown = true
+		_hud.show_story(STORY_TEXT)
 	_set_objective(OBJECTIVE_FIGHT)
+func _build_sfx() -> void:
+	var sfx_script: Script = load("res://scripts/sfx.gd")
+	if sfx_script == null:
+		push_error("Game: missing res://scripts/sfx.gd")
+		return
+	var sfx: Node = sfx_script.new()
+	sfx.name = "Sfx"
+	add_child(sfx)
+func _build_navigation() -> void:
+	# Bake a navmesh from the level's static colliders so enemies path around
+	# rubble and pillars instead of steering in a straight line.
+	var nm := NavigationMesh.new()
+	nm.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	nm.geometry_source_geometry_mode = NavigationMesh.SOURCE_GEOMETRY_GROUPS_EXPLICIT
+	nm.geometry_source_group_name = "nav_source"
+	# Agent values are kept at exact multiples of the voxel size so the baker
+	# does not round them (it warns otherwise).
+	nm.cell_size = 0.25
+	nm.cell_height = 0.2
+	nm.agent_radius = 0.5
+	nm.agent_height = 2.0
+	nm.agent_max_climb = 0.2
+	nm.agent_max_slope = 45.0
+	var region := NavigationRegion3D.new()
+	region.name = "NavRegion"
+	region.navigation_mesh = nm
+	add_child(region)
+	region.bake_navigation_mesh(false)
+	var polys: int = nm.get_polygon_count()
+	print("Game: navmesh baked with %d polygons" % polys)
+	if polys == 0:
+		push_warning("Game: navmesh is empty - enemies fall back to direct chase")
 func _process(delta: float) -> void:
 	_time += delta
 	if not _game_over and _player != null and _player.global_position.y < KILL_PLANE_Y:
@@ -102,6 +141,7 @@ func _add_box(size: Vector3, pos: Vector3, mat: Material, box_name: String) -> M
 	var body := StaticBody3D.new()
 	body.name = box_name + "Body"
 	body.position = pos
+	body.add_to_group("nav_source")
 	var cs := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = size
