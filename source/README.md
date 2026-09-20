@@ -5,7 +5,7 @@ This repository is the Godot 4.7 **web export** of *Backup Plan* (`index.html`,
 `index.pck`; this folder holds the readable copies of those scripts so that
 changes to the build can be reviewed as a normal diff.
 
-- `scripts/` — the five game scripts exactly as embedded in `index.pck`
+- `scripts/` — the six game scripts exactly as embedded in `index.pck`
   (`res://scripts/*.gd`). The pck now carries them as plain-text GDScript
   instead of compiled binary tokens, so the files here are byte-for-byte
   what the game runs.
@@ -27,6 +27,13 @@ changes to the build can be reviewed as a normal diff.
   out on death.
 - `hud.gd` draws health, ammo, the objective line, the story card, the
   death / win screens and the touch controls.
+- `sfx.gd` synthesises every sound effect (gunshot, hit, growl, reload,
+  hurt) into `AudioStreamWAV` streams at startup, since the project ships no
+  audio assets, and plays them from small 2D / 3D player pools.
+
+Enemies navigate on a `NavigationMesh` that `game.gd` bakes at startup from
+the level's static colliders (the `nav_source` group), with a straight-line
+fallback while the map is not ready.
 
 ## Porting the fixes back into the Godot project
 

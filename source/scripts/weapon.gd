@@ -17,6 +17,12 @@ var _muzzle: Marker3D = null
 var _flash: MeshInstance3D = null
 var _flash_timer: Timer = null
 var _reload_timer: Timer = null
+# Tracer / impact visuals are pooled: each shot used to allocate a fresh mesh
+# and material, which churned the GC on mobile.
+const POOL_SIZE: int = 10
+var _tracers: Array[MeshInstance3D] = []
+var _impacts: Array[MeshInstance3D] = []
+var _fx_tweens: Dictionary = {}
 func _ready() -> void:
 	_camera = _find_camera()
 	_build_gun()
@@ -44,6 +50,11 @@ func try_fire() -> void:
 	fired.emit()
 	_do_hitscan()
 	_play_muzzle_flash()
+	_sfx("shot", -6.0, randf_range(0.95, 1.05))
+func _sfx(kind: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
+	var sfx: Node = get_tree().get_first_node_in_group("sfx")
+	if sfx != null and sfx.has_method("play"):
+		sfx.play(kind, volume_db, pitch)
 func start_reload() -> void:
 	if reloading:
 		return
@@ -51,6 +62,7 @@ func start_reload() -> void:
 		return
 	reloading = true
 	_reload_timer.start(reload_time)
+	_sfx("reload", -4.0)
 func _finish_reload() -> void:
 	mag = mag_size
 	reloading = false
@@ -118,36 +130,44 @@ func _do_hitscan() -> void:
 			collider.call("take_damage", damage)
 		_spawn_impact(end_pos, hit.get("normal", Vector3.UP))
 	_spawn_tracer(muzzle_pos, end_pos)
-func _spawn_tracer(from_pos: Vector3, to_pos: Vector3) -> void:
-	var dist: float = from_pos.distance_to(to_pos)
-	if dist < 0.1:
-		return
+func _fx_root() -> Node:
+	var root: Node = get_tree().current_scene
+	if root == null:
+		root = get_tree().root
+	return root
+func _acquire(pool: Array[MeshInstance3D], builder: Callable) -> MeshInstance3D:
+	for n in pool:
+		if is_instance_valid(n) and not n.visible:
+			return n
+	if pool.size() < POOL_SIZE:
+		var made: MeshInstance3D = builder.call()
+		pool.append(made)
+		return made
+	# Pool exhausted: recycle the oldest live effect.
+	var oldest: MeshInstance3D = pool.pop_front()
+	pool.append(oldest)
+	return oldest
+func _restart_fx_tween(n: MeshInstance3D) -> Tween:
+	var old: Tween = _fx_tweens.get(n)
+	if old != null and old.is_valid():
+		old.kill()
+	var tw := n.create_tween()
+	_fx_tweens[n] = tw
+	return tw
+func _build_tracer() -> MeshInstance3D:
 	var tracer := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.02, 0.02, dist)
+	mesh.size = Vector3(0.02, 0.02, 1.0)
 	tracer.mesh = mesh
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.albedo_color = Color(1.0, 0.85, 0.55, 0.9)
 	tracer.material_override = mat
-	var root: Node = get_tree().current_scene
-	if root == null:
-		root = get_tree().root
-	root.add_child(tracer)
-	tracer.global_position = (from_pos + to_pos) * 0.5
-	var shot_dir: Vector3 = (to_pos - from_pos).normalized()
-	var up: Vector3 = Vector3.UP
-	if absf(shot_dir.dot(up)) > 0.99:
-		up = Vector3.RIGHT
-	tracer.look_at(to_pos, up)
-	var tw := tracer.create_tween()
-	tw.tween_property(mat, "albedo_color", Color(1.0, 0.85, 0.55, 0.0), 0.06)
-	tw.tween_callback(tracer.queue_free)
-func _spawn_impact(pos: Vector3, normal: Vector3) -> void:
-	var n: Vector3 = normal
-	if n.length() < 0.01:
-		n = Vector3.UP
+	tracer.visible = false
+	_fx_root().add_child(tracer)
+	return tracer
+func _build_impact() -> MeshInstance3D:
 	var impact := MeshInstance3D.new()
 	var mesh := SphereMesh.new()
 	mesh.radius = 0.06
@@ -158,15 +178,42 @@ func _spawn_impact(pos: Vector3, normal: Vector3) -> void:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.albedo_color = Color(1.0, 0.5, 0.2, 0.95)
 	impact.material_override = mat
-	var root: Node = get_tree().current_scene
-	if root == null:
-		root = get_tree().root
-	root.add_child(impact)
+	impact.visible = false
+	_fx_root().add_child(impact)
+	return impact
+func _spawn_tracer(from_pos: Vector3, to_pos: Vector3) -> void:
+	var dist: float = from_pos.distance_to(to_pos)
+	if dist < 0.1:
+		return
+	var tracer := _acquire(_tracers, _build_tracer)
+	var mat := tracer.material_override as StandardMaterial3D
+	tracer.visible = true
+	tracer.scale = Vector3.ONE
+	tracer.global_position = (from_pos + to_pos) * 0.5
+	var shot_dir: Vector3 = (to_pos - from_pos).normalized()
+	var up: Vector3 = Vector3.UP
+	if absf(shot_dir.dot(up)) > 0.99:
+		up = Vector3.RIGHT
+	tracer.look_at(to_pos, up)
+	tracer.scale = Vector3(1.0, 1.0, dist)
+	mat.albedo_color = Color(1.0, 0.85, 0.55, 0.9)
+	var tw := _restart_fx_tween(tracer)
+	tw.tween_property(mat, "albedo_color", Color(1.0, 0.85, 0.55, 0.0), 0.06)
+	tw.tween_callback(func() -> void: tracer.visible = false)
+func _spawn_impact(pos: Vector3, normal: Vector3) -> void:
+	var n: Vector3 = normal
+	if n.length() < 0.01:
+		n = Vector3.UP
+	var impact := _acquire(_impacts, _build_impact)
+	var mat := impact.material_override as StandardMaterial3D
+	impact.visible = true
+	impact.scale = Vector3.ONE
 	impact.global_position = pos + n.normalized() * 0.03
-	var tw := impact.create_tween().set_parallel(true)
+	mat.albedo_color = Color(1.0, 0.5, 0.2, 0.95)
+	var tw := _restart_fx_tween(impact).set_parallel(true)
 	tw.tween_property(impact, "scale", Vector3(3.0, 3.0, 3.0), 0.15)
 	tw.tween_property(mat, "albedo_color", Color(1.0, 0.5, 0.2, 0.0), 0.15)
-	tw.chain().tween_callback(impact.queue_free)
+	tw.chain().tween_callback(func() -> void: impact.visible = false)
 func _play_muzzle_flash() -> void:
 	if _flash == null or _flash_timer == null:
 		return

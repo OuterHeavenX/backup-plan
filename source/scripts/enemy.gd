@@ -6,7 +6,11 @@ signal died(enemy: Enemy)
 @export var attack_range: float = 1.3
 @export var attack_damage: float = 10.0
 @export var attack_cooldown: float = 1.0
-var gravity: float = 20.0
+# Same gravity as the player (Player.GRAVITY) so both bodies fall alike.
+const GRAVITY: float = 20.0
+const NAV_TARGET_INTERVAL: float = 0.15
+var _agent: NavigationAgent3D = null
+var _nav_timer: float = 0.0
 var _dead: bool = false
 var _cooldown: float = 0.0
 var _mats: Array[StandardMaterial3D] = []
@@ -23,9 +27,16 @@ var _stuck_strikes: int = 0
 var _free_time: float = 0.0
 func _ready() -> void:
 	add_to_group("enemies")
-	gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 20.0))
 	_cooldown = randf() * 0.4
 	_collect_materials()
+	_agent = NavigationAgent3D.new()
+	_agent.name = "NavAgent"
+	_agent.radius = 0.5
+	_agent.height = 1.95
+	_agent.path_desired_distance = 0.5
+	_agent.target_desired_distance = 0.5
+	_agent.path_max_distance = 3.0
+	add_child(_agent)
 func _collect_materials() -> void:
 	_mats.clear()
 	_orig_emission.clear()
@@ -47,8 +58,13 @@ func take_damage(amount: float) -> void:
 		return
 	hp -= amount
 	_flash_hit()
+	_sfx_at("hit", -3.0, randf_range(0.9, 1.1))
 	if hp <= 0.0:
 		_die()
+func _sfx_at(kind: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
+	var sfx: Node = get_tree().get_first_node_in_group("sfx")
+	if sfx != null and sfx.has_method("play_at"):
+		sfx.play_at(kind, global_position + Vector3(0, 1.2, 0), volume_db, pitch)
 func _flash_hit() -> void:
 	if _mats.is_empty():
 		return
@@ -73,6 +89,7 @@ func _die() -> void:
 		return
 	_dead = true
 	died.emit(self)
+	_sfx_at("growl", 0.0, 0.6)
 	if _flash_tween != null and _flash_tween.is_valid():
 		_flash_tween.kill()
 	if _lunge_tween != null and _lunge_tween.is_valid():
@@ -123,7 +140,7 @@ func _physics_process(delta: float) -> void:
 	var wants_move := false
 	if dist > attack_range:
 		wants_move = true
-		var dir := to_player / dist
+		var dir := _chase_direction(player, to_player / dist, delta)
 		if _unstick_time > 0.0:
 			_unstick_time -= delta
 			dir = _unstick_dir
@@ -136,11 +153,32 @@ func _physics_process(delta: float) -> void:
 			_cooldown = attack_cooldown
 			if player.has_method("take_damage"):
 				player.take_damage(attack_damage)
+			_sfx_at("growl", -2.0, randf_range(0.9, 1.15))
 			_lunge()
 	_apply_gravity(delta)
 	move_and_slide()
 	if wants_move:
 		_update_stuck_state(to_player, delta)
+func _chase_direction(player: Node3D, direct: Vector3, delta: float) -> Vector3:
+	# Follow the baked navmesh when one is available; otherwise (or while the
+	# path has nothing useful) fall back to a straight line.
+	if _agent == null:
+		return direct
+	var map: RID = get_world_3d().navigation_map
+	if NavigationServer3D.map_get_iteration_id(map) == 0:
+		return direct
+	_nav_timer -= delta
+	if _nav_timer <= 0.0:
+		_nav_timer = NAV_TARGET_INTERVAL
+		_agent.target_position = player.global_position
+	if _agent.is_navigation_finished():
+		return direct
+	var next: Vector3 = _agent.get_next_path_position()
+	var d := next - global_position
+	d.y = 0.0
+	if d.length() < 0.05:
+		return direct
+	return d.normalized()
 func _update_stuck_state(to_player: Vector3, delta: float) -> void:
 	if _unstick_time > 0.0:
 		return
@@ -164,7 +202,7 @@ func _apply_gravity(delta: float) -> void:
 		if velocity.y < 0.0:
 			velocity.y = 0.0
 	else:
-		velocity.y -= gravity * delta
+		velocity.y -= GRAVITY * delta
 func _lunge() -> void:
 	var fwd := -global_transform.basis.z
 	fwd.y = 0.0
