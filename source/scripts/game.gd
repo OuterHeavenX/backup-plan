@@ -11,6 +11,16 @@ const ZONE_POSITIONS: Array = [
 	]
 const ZONE_SIZE := Vector3(8, 4, 5)
 const KILL_PLANE_Y: float = -15.0
+# Finite ammo: fixed floor pickups along the corridor plus a chance of a
+# smaller pack dropping from each kill.
+const AMMO_PICKUPS: Array = [
+		Vector3(0, 0.35, -9),
+		Vector3(0, 0.35, -28.5),
+		Vector3(0, 0.35, -46),
+	]
+const AMMO_PICKUP_ROUNDS: int = 30
+const AMMO_DROP_ROUNDS: int = 15
+const AMMO_DROP_CHANCE: float = 0.4
 const WAVE_SPAWNS: Array = [
 		[Vector3(-2.0, 0.0, -21.0), Vector3(2.0, 0.0, -21.0), Vector3(0.0, 0.0, -25.0)],
 		[Vector3(-2.5, 0.0, -39.0), Vector3(2.5, 0.0, -39.0), Vector3(-1.0, 0.0, -43.0), Vector3(1.0, 0.0, -43.0)],
@@ -37,6 +47,7 @@ func _ready() -> void:
 	_build_zones()
 	_build_gate()
 	_build_navigation()
+	_build_ammo_pickups()
 	if not story_shown:
 		story_shown = true
 		_hud.show_story(STORY_TEXT)
@@ -49,6 +60,14 @@ func _build_sfx() -> void:
 	var sfx: Node = sfx_script.new()
 	sfx.name = "Sfx"
 	add_child(sfx)
+func _build_ammo_pickups() -> void:
+	for pos in AMMO_PICKUPS:
+		_spawn_ammo(pos, AMMO_PICKUP_ROUNDS)
+func _spawn_ammo(pos: Vector3, rounds: int) -> void:
+	var pickup := AmmoPickup.new()
+	pickup.rounds = rounds
+	pickup.position = pos
+	add_child(pickup)
 func _build_navigation() -> void:
 	# Bake a navmesh from the level's static colliders so enemies path around
 	# rubble and pillars instead of steering in a straight line.
@@ -259,6 +278,10 @@ func _on_enemy_died(enemy: Enemy) -> void:
 	_alive.erase(enemy)
 	if _game_over:
 		return
+	if randf() < AMMO_DROP_CHANCE and is_instance_valid(enemy):
+		var drop_pos: Vector3 = enemy.global_position
+		drop_pos.y = 0.35
+		_spawn_ammo(drop_pos, AMMO_DROP_ROUNDS)
 	if _all_waves_cleared():
 		_set_objective(OBJECTIVE_GATE_OPEN)
 		_open_gate()
@@ -328,3 +351,42 @@ func _on_player_died() -> void:
 		return
 	_game_over = true
 	_hud.show_death()
+class AmmoPickup extends Area3D:
+	var rounds: int = 30
+	var _mesh: MeshInstance3D = null
+	var _bob_t: float = 0.0
+	func _ready() -> void:
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.35, 0.22, 0.35)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.9, 0.7, 0.2)
+		mat.emission_enabled = true
+		mat.emission = Color(1.0, 0.75, 0.2)
+		mat.emission_energy_multiplier = 1.2
+		bm.material = mat
+		mi.mesh = bm
+		add_child(mi)
+		_mesh = mi
+		var cs := CollisionShape3D.new()
+		var sh := SphereShape3D.new()
+		sh.radius = 0.9
+		cs.shape = sh
+		add_child(cs)
+		body_entered.connect(_on_body_entered)
+	func _process(delta: float) -> void:
+		_bob_t += delta
+		rotate_y(1.5 * delta)
+		_mesh.position.y = 0.06 * sin(_bob_t * 3.0)
+	func _on_body_entered(body: Node3D) -> void:
+		if not body.is_in_group("player"):
+			return
+		var weapon: Node = body.get_node_or_null("Head/Camera3D/WeaponMount/Weapon")
+		if weapon == null or not weapon.has_method("add_reserve"):
+			return
+		weapon.add_reserve(rounds)
+		var sfx: Node = get_tree().get_first_node_in_group("sfx")
+		if sfx != null and sfx.has_method("play"):
+			sfx.play("reload", -6.0, 1.4)
+		set_deferred("monitoring", false)
+		queue_free()

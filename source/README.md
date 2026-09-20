@@ -23,10 +23,14 @@ changes to the build can be reviewed as a normal diff.
   exit gate that only completes the level once every wave has been cleared.
 - `player.gd` is a `CharacterBody3D` FPS controller (WASD + mouse, or the
   touch joystick / look-drag on phones).
-- `weapon.gd` is a hitscan rifle with a 30-round magazine, tracers, impact
-  sparks and a muzzle flash.
-- `enemy.gd` chases the player, melees inside 1.3 m, flashes on hit and fades
-  out on death.
+- `weapon.gd` is a hitscan rifle with a 30-round magazine and a finite
+  reserve (60 to start, topped up by glowing ammo packs on the corridor
+  floor and 40% drops from kills), tracers, impact sparks and a muzzle
+  flash. Hits above an enemy's shoulders on its centre line are headshots
+  for double damage.
+- `enemy.gd` chases the player, winds up for 0.35 s inside 1.3 m (eyes flare,
+  head swells) and then strikes if the player is still within reach, flashes
+  on hit and fades out on death.
 - `hud.gd` draws health, ammo, the objective line, the story card, the
   death / win screens and the touch controls.
 - `sfx.gd` synthesises every sound effect (gunshot, hit, growl, reload,

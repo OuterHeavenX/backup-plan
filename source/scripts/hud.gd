@@ -5,6 +5,10 @@ var fire_grace_until: int = 0
 var _player: Player = null
 var _weapon: Weapon = null
 var _touch_shown: bool = false
+var _hitmarker_tween: Tween = null
+const AMMO_COLOR_NORMAL := Color(1.0, 0.85, 0.6, 1.0)
+const AMMO_COLOR_LOW := Color(1.0, 0.55, 0.2, 1.0)
+const AMMO_COLOR_EMPTY := Color(1.0, 0.2, 0.15, 1.0)
 @onready var _crosshair: ColorRect = $UI/Crosshair
 @onready var _health_bar: ProgressBar = $UI/HealthBar
 @onready var _ammo_label: Label = $UI/AmmoLabel
@@ -32,6 +36,7 @@ func bind(p: Player, w: Weapon) -> void:
 		_player.health_changed.connect(_on_health_changed)
 	if _weapon != null:
 		_weapon.ammo_changed.connect(_on_ammo_changed)
+		_weapon.target_hit.connect(_on_weapon_hit)
 		_on_ammo_changed(_weapon.mag, _weapon.reserve)
 func show_story(text: String) -> void:
 	_story_text.text = text
@@ -78,6 +83,22 @@ func _on_health_changed(hp: float, max_hp: float) -> void:
 func _on_ammo_changed(mag: int, reserve: int) -> void:
 	var res_text: String = "∞" if reserve < 0 else str(reserve)
 	_ammo_label.text = "%d / %s" % [mag, res_text]
+	var color := AMMO_COLOR_NORMAL
+	if mag == 0 and reserve == 0:
+		color = AMMO_COLOR_EMPTY
+	elif mag <= 5 or (reserve >= 0 and reserve == 0):
+		color = AMMO_COLOR_LOW
+	_ammo_label.add_theme_color_override("font_color", color)
+func _on_weapon_hit(headshot: bool) -> void:
+	# Crosshair hit marker: a quick pop, red for headshots.
+	_crosshair.pivot_offset = _crosshair.size * 0.5
+	if _hitmarker_tween != null and _hitmarker_tween.is_valid():
+		_hitmarker_tween.kill()
+	_crosshair.scale = Vector2(2.4, 2.4) if headshot else Vector2(1.8, 1.8)
+	_crosshair.color = Color(1.0, 0.15, 0.1, 1.0) if headshot else Color(1.0, 0.85, 0.3, 1.0)
+	_hitmarker_tween = create_tween().set_parallel(true)
+	_hitmarker_tween.tween_property(_crosshair, "scale", Vector2.ONE, 0.18)
+	_hitmarker_tween.tween_property(_crosshair, "color", Color(1.0, 1.0, 1.0, 0.7), 0.25)
 func _on_restart_pressed() -> void:
 	get_tree().paused = false
 	get_tree().reload_current_scene()

@@ -6,6 +6,17 @@ signal died(enemy: Enemy)
 @export var attack_range: float = 1.3
 @export var attack_damage: float = 10.0
 @export var attack_cooldown: float = 1.0
+# Attack telegraph: the enemy winds up (eyes flare, head swells) before it
+# strikes, and the strike only lands if the player is still in reach.
+@export var windup_time: float = 0.35
+@export var strike_reach_bonus: float = 0.5
+const TELEGRAPH_EYE_BOOST: float = 3.0
+const TELEGRAPH_HEAD_SCALE: float = 1.35
+var _windup: float = 0.0
+var _head: MeshInstance3D = null
+var _eye_mats: Array[StandardMaterial3D] = []
+var _telegraph_tween: Tween = null
+var _flash_energy: float = 2.0
 # Same gravity as the player (Player.GRAVITY) so both bodies fall alike.
 const GRAVITY: float = 20.0
 const NAV_TARGET_INTERVAL: float = 0.15
@@ -40,6 +51,8 @@ func _ready() -> void:
 func _collect_materials() -> void:
 	_mats.clear()
 	_orig_emission.clear()
+	_eye_mats.clear()
+	_head = get_node_or_null("Head") as MeshInstance3D
 	for child in get_children():
 		var mi := child as MeshInstance3D
 		if mi == null:
@@ -53,25 +66,31 @@ func _collect_materials() -> void:
 		mi.set_surface_override_material(0, m)
 		_mats.append(m)
 		_orig_emission.append([m.emission_enabled, m.emission, m.emission_energy_multiplier])
-func take_damage(amount: float) -> void:
+		if mi.name.begins_with("Eye"):
+			_eye_mats.append(m)
+func take_damage(amount: float, headshot: bool = false) -> void:
 	if _dead:
 		return
 	hp -= amount
-	_flash_hit()
-	_sfx_at("hit", -3.0, randf_range(0.9, 1.1))
+	_flash_hit(4.0 if headshot else 2.0)
+	if headshot:
+		_sfx_at("hit", 0.0, randf_range(1.3, 1.5))
+	else:
+		_sfx_at("hit", -3.0, randf_range(0.9, 1.1))
 	if hp <= 0.0:
 		_die()
 func _sfx_at(kind: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
 	var sfx: Node = get_tree().get_first_node_in_group("sfx")
 	if sfx != null and sfx.has_method("play_at"):
 		sfx.play_at(kind, global_position + Vector3(0, 1.2, 0), volume_db, pitch)
-func _flash_hit() -> void:
+func _flash_hit(energy: float = 2.0) -> void:
 	if _mats.is_empty():
 		return
+	_flash_energy = energy
 	for m in _mats:
 		m.emission_enabled = true
 		m.emission = Color(1.0, 0.9, 0.85)
-		m.emission_energy_multiplier = 2.0
+		m.emission_energy_multiplier = energy
 	if _flash_tween != null and _flash_tween.is_valid():
 		_flash_tween.kill()
 	_flash_tween = create_tween()
@@ -81,9 +100,30 @@ func _apply_flash_blend(t: float) -> void:
 		var m: StandardMaterial3D = _mats[i]
 		var o: Array = _orig_emission[i]
 		m.emission = Color(1.0, 0.9, 0.85).lerp(o[1] as Color, t)
-		m.emission_energy_multiplier = lerpf(2.0, float(o[2]), t)
+		var base_energy: float = float(o[2])
+		if _windup > 0.0 and _eye_mats.has(m):
+			base_energy *= TELEGRAPH_EYE_BOOST
+		m.emission_energy_multiplier = lerpf(_flash_energy, base_energy, t)
 		if t >= 1.0:
 			m.emission_enabled = bool(o[0])
+func _set_telegraph(on: bool) -> void:
+	for i in range(_mats.size()):
+		var m: StandardMaterial3D = _mats[i]
+		if not _eye_mats.has(m):
+			continue
+		var o: Array = _orig_emission[i]
+		m.emission_energy_multiplier = float(o[2]) * (TELEGRAPH_EYE_BOOST if on else 1.0)
+	if _head == null:
+		return
+	if _telegraph_tween != null and _telegraph_tween.is_valid():
+		_telegraph_tween.kill()
+	_telegraph_tween = create_tween()
+	if on:
+		_telegraph_tween.tween_property(_head, "scale", Vector3.ONE * TELEGRAPH_HEAD_SCALE, windup_time) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	else:
+		_telegraph_tween.tween_property(_head, "scale", Vector3.ONE, 0.12) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 func _die() -> void:
 	if _dead:
 		return
@@ -94,6 +134,8 @@ func _die() -> void:
 		_flash_tween.kill()
 	if _lunge_tween != null and _lunge_tween.is_valid():
 		_lunge_tween.kill()
+	if _telegraph_tween != null and _telegraph_tween.is_valid():
+		_telegraph_tween.kill()
 	set_physics_process(false)
 	velocity = Vector3.ZERO
 	collision_layer = 0
@@ -138,7 +180,14 @@ func _physics_process(delta: float) -> void:
 		var target_yaw := atan2(-to_player.x, -to_player.z)
 		rotation.y = lerp_angle(rotation.y, target_yaw, minf(1.0, 10.0 * delta))
 	var wants_move := false
-	if dist > attack_range:
+	if _windup > 0.0:
+		# Hold still while winding up so the player can step out of reach.
+		velocity.x = move_toward(velocity.x, 0.0, speed * 8.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, speed * 8.0 * delta)
+		_windup -= delta
+		if _windup <= 0.0:
+			_strike(player, dist)
+	elif dist > attack_range:
 		wants_move = true
 		var dir := _chase_direction(player, to_player / dist, delta)
 		if _unstick_time > 0.0:
@@ -151,14 +200,18 @@ func _physics_process(delta: float) -> void:
 		velocity.z = move_toward(velocity.z, 0.0, speed * 8.0 * delta)
 		if _cooldown <= 0.0:
 			_cooldown = attack_cooldown
-			if player.has_method("take_damage"):
-				player.take_damage(attack_damage)
+			_windup = windup_time
+			_set_telegraph(true)
 			_sfx_at("growl", -2.0, randf_range(0.9, 1.15))
-			_lunge()
 	_apply_gravity(delta)
 	move_and_slide()
 	if wants_move:
 		_update_stuck_state(to_player, delta)
+func _strike(player: Node3D, dist: float) -> void:
+	_set_telegraph(false)
+	_lunge()
+	if dist <= attack_range + strike_reach_bonus and player.has_method("take_damage"):
+		player.take_damage(attack_damage)
 func _chase_direction(player: Node3D, direct: Vector3, delta: float) -> Vector3:
 	# Follow the baked navmesh when one is available; otherwise (or while the
 	# path has nothing useful) fall back to a straight line.

@@ -2,13 +2,23 @@ class_name Weapon
 extends Node3D
 signal ammo_changed(mag: int, reserve: int)
 signal fired
+signal target_hit(headshot: bool)
 @export var mag_size: int = 30
 @export var fire_interval: float = 0.12
 @export var damage: float = 25.0
 @export var max_range: float = 100.0
 @export var reload_time: float = 1.2
+# Reserve ammo. A negative value means infinite.
+@export var start_reserve: int = 60
+# Hits this high up the enemy (local space) and this close to its centre
+# line count as headshots.
+const HEAD_MIN_Y: float = 1.45
+const HEAD_HALF_WIDTH: float = 0.35
+const HEADSHOT_MULT: float = 2.0
+const DRY_FIRE_INTERVAL: float = 0.25
 var mag: int = 30
 var reserve: int = -1
+var _dry_cooldown: float = 0.0
 var reloading: bool = false
 var firing: bool = false
 var _cooldown: float = 0.0
@@ -24,6 +34,7 @@ var _tracers: Array[MeshInstance3D] = []
 var _impacts: Array[MeshInstance3D] = []
 var _fx_tweens: Dictionary = {}
 func _ready() -> void:
+	reserve = start_reserve
 	_camera = _find_camera()
 	_build_gun()
 	# Reload runs on a child Timer (not an awaited SceneTreeTimer) so it is
@@ -42,7 +53,10 @@ func try_fire() -> void:
 	if _controls_locked():
 		return
 	if mag <= 0:
-		start_reload()
+		if reserve == 0:
+			_dry_fire()
+		else:
+			start_reload()
 		return
 	_cooldown = fire_interval
 	mag -= 1
@@ -60,15 +74,32 @@ func start_reload() -> void:
 		return
 	if mag >= mag_size:
 		return
+	if reserve == 0:
+		_dry_fire()
+		return
 	reloading = true
 	_reload_timer.start(reload_time)
 	_sfx("reload", -4.0)
 func _finish_reload() -> void:
-	mag = mag_size
+	var need: int = mag_size - mag
+	var take: int = need if reserve < 0 else mini(need, reserve)
+	mag += take
+	if reserve > 0:
+		reserve -= take
 	reloading = false
 	ammo_changed.emit(mag, reserve)
+func add_reserve(rounds: int) -> void:
+	if reserve >= 0:
+		reserve += rounds
+	ammo_changed.emit(mag, reserve)
+func _dry_fire() -> void:
+	if _dry_cooldown > 0.0:
+		return
+	_dry_cooldown = DRY_FIRE_INTERVAL
+	_sfx("reload", -10.0, 1.7)
 func _physics_process(delta: float) -> void:
 	_cooldown = maxf(0.0, _cooldown - delta)
+	_dry_cooldown = maxf(0.0, _dry_cooldown - delta)
 	if reloading:
 		return
 	if _controls_locked():
@@ -127,7 +158,12 @@ func _do_hitscan() -> void:
 		end_pos = hit["position"]
 		var collider: Object = hit["collider"]
 		if collider is Node and (collider as Node).is_in_group("enemies") and collider.has_method("take_damage"):
-			collider.call("take_damage", damage)
+			var headshot := false
+			if collider is Node3D:
+				var local: Vector3 = (collider as Node3D).to_local(end_pos)
+				headshot = local.y >= HEAD_MIN_Y and absf(local.x) <= HEAD_HALF_WIDTH
+			collider.call("take_damage", damage * (HEADSHOT_MULT if headshot else 1.0), headshot)
+			target_hit.emit(headshot)
 		_spawn_impact(end_pos, hit.get("normal", Vector3.UP))
 	_spawn_tracer(muzzle_pos, end_pos)
 func _fx_root() -> Node:
