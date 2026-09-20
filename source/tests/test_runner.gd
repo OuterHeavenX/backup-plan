@@ -39,6 +39,7 @@ func _run_all() -> void:
 	await _test_aim_while_firing()
 	await _test_fire_jiggle_while_walking()
 	await _test_touch_identifier_hardening()
+	await _test_two_thumb_relative_ignored()
 	await _test_enemy_ai()
 	await _test_win_path()
 	await _test_lose_path()
@@ -413,6 +414,43 @@ func _test_touch_identifier_hardening() -> void:
 				"touch-down with a reused index did not reset stale look tracking")
 	else:
 		_verdict("touch_identifier_hardening", true)
+func _test_two_thumb_relative_ignored() -> void:
+	# Regression: Godot's web platform fills InputEventScreenDrag.relative
+	# from the wrong finger when two touches are down, so the look area must
+	# derive its delta from positions and never from `relative`.
+	_reset_player()
+	_heal()
+	_hud.fire_grace_until = 0
+	var look := _hud.get_node("UI/TouchControls/LookArea")
+	var joy := _hud.get_node("UI/TouchControls/Joystick")
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	_player.rotation.y = 0.0
+	_player._yaw = 0.0
+	var lp := Vector2(vp.x * 0.2, vp.y * 0.6)
+	var rp := Vector2(vp.x * 0.75, vp.y * 0.45)
+	joy._input(_mk_touch(true, 30, lp))
+	look._input(_mk_touch(true, 30, lp))
+	joy._input(_mk_touch(true, 31, rp))
+	look._input(_mk_touch(true, 31, rp))
+	for i in range(10):
+		lp += Vector2(0, -3)
+		rp += Vector2(6, 0)
+		joy._input(_mk_drag(30, lp, Vector2(0, -3)))
+		look._input(_mk_drag(30, lp, Vector2(0, -3)))
+		var bogus: Vector2 = rp - lp
+		joy._input(_mk_drag(31, rp, bogus))
+		look._input(_mk_drag(31, rp, bogus))
+		await get_tree().physics_frame
+	var yaw: float = _player.rotation.y
+	joy._input(_mk_touch(false, 30, lp))
+	look._input(_mk_touch(false, 30, lp))
+	look._input(_mk_touch(false, 31, rp))
+	var expected: float = -60.0 * _player.touch_look_sens
+	if absf(yaw - expected) > 0.01:
+		_verdict("two_thumb_relative_ignored", false,
+				"two-thumb drags spun the camera (dyaw=%.3f, expected %.3f)" % [yaw, expected])
+	else:
+		_verdict("two_thumb_relative_ignored", true)
 func _test_enemy_ai() -> void:
 	_reset_player()
 	_heal()

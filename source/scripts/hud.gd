@@ -226,6 +226,7 @@ class TouchLookArea extends Control:
 	var _touch_index: int = -1
 	var _fire_touch_index: int = -1
 	var _last_look_pos: Vector2 = Vector2.ZERO
+	var _fire_last_pos: Vector2 = Vector2.ZERO
 	var _teleport_strikes: int = 0
 	func _input(event: InputEvent) -> void:
 		if hud_ref == null or hud_ref._player == null:
@@ -253,17 +254,25 @@ class TouchLookArea extends Control:
 			_teleport_strikes = 0
 		elif _fire_touch_index == -1 and _is_fire_touch(pos):
 			_fire_touch_index = index
+			_fire_last_pos = pos
 	func _on_touch_up(index: int) -> void:
 		if index == _touch_index:
 			_touch_index = -1
 			_teleport_strikes = 0
 		if index == _fire_touch_index:
 			_fire_touch_index = -1
-	func _on_touch_drag(index: int, pos: Vector2, relative: Vector2) -> void:
+	func _on_touch_drag(index: int, pos: Vector2, _relative: Vector2) -> void:
+		# InputEventScreenDrag.relative is deliberately ignored. Godot's web
+		# platform computes it against the wrong finger when more than one
+		# touch is down (its previous-position table is indexed by the slot
+		# inside the touchmove event, not by the touch id), which spun the
+		# camera whenever both thumbs were on the screen. The delta is derived
+		# from the tracked positions instead, which are always correct.
 		if stick_ref != null and index == stick_ref.get_touch_index():
 			return
 		if index == _touch_index:
-			if pos.distance_to(_last_look_pos) > LOOK_TELEPORT_PX:
+			var delta: Vector2 = pos - _last_look_pos
+			if delta.length() > LOOK_TELEPORT_PX:
 				_teleport_strikes += 1
 				_last_look_pos = pos
 				if _teleport_strikes >= 2:
@@ -272,14 +281,18 @@ class TouchLookArea extends Control:
 				return
 			_teleport_strikes = 0
 			_last_look_pos = pos
-			hud_ref._player.apply_touch_look(relative)
+			hud_ref._player.apply_touch_look(delta)
 		elif index == _fire_touch_index and _touch_index == -1:
 			if not _is_fire_touch(pos, FIRE_LEAVE_MARGIN):
+				var delta: Vector2 = pos - _fire_last_pos
 				_fire_touch_index = -1
 				_touch_index = index
 				_last_look_pos = pos
 				_teleport_strikes = 0
-				hud_ref._player.apply_touch_look(relative)
+				if delta.length() <= LOOK_TELEPORT_PX:
+					hud_ref._player.apply_touch_look(delta)
+			else:
+				_fire_last_pos = pos
 	func _is_fire_touch(pos: Vector2, margin: float = 0.0) -> bool:
 		if fire_button == null:
 			return false

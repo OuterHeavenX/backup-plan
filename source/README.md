@@ -10,9 +10,11 @@ changes to the build can be reviewed as a normal diff.
   instead of compiled binary tokens, so the files here are byte-for-byte
   what the game runs.
 - `tests/` — the headless test scenes shipped in the pck
-  (`res://tests/*.gd`), unchanged. Run `res://tests/test_runner.tscn` for the
-  12 unit-style checks and `res://tests/bot_playthrough.tscn` for a scripted
-  bot that plays the whole level.
+  (`res://tests/*.gd`). Run `res://tests/test_runner.tscn` for the 13
+  unit-style checks (`test_runner.gd` is shipped as plain text and now
+  includes the two-thumb regression test) and
+  `res://tests/bot_playthrough.tscn` for a scripted bot that plays the whole
+  level.
 
 ## How the game works
 
@@ -30,6 +32,11 @@ changes to the build can be reviewed as a normal diff.
 - `sfx.gd` synthesises every sound effect (gunshot, hit, growl, reload,
   hurt) into `AudioStreamWAV` streams at startup, since the project ships no
   audio assets, and plays them from small 2D / 3D player pools.
+
+Touch look deltas are computed from touch positions, never from
+`InputEventScreenDrag.relative`: Godot's web platform (4.7) fills `relative`
+from the wrong finger when two touches are down, which spun the camera
+whenever both thumbs were on the screen.
 
 Enemies navigate on a `NavigationMesh` that `game.gd` bakes at startup from
 the level's static colliders (the `nav_source` group), with a straight-line
