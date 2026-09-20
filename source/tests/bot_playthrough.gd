@@ -1,7 +1,5 @@
 extends Node
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
-const ZONE_ZS: Array[float] = [-16.0, -34.0, -52.0]
-const GATE_POS := Vector3(0, 0, -64.5)
 const MAX_FRAMES: int = 30000
 var _game: Game
 var _player: Player
@@ -16,6 +14,7 @@ func _ready() -> void:
 	_run.call_deferred()
 func _run() -> void:
 	print("--- bot playthrough ---")
+	Game.skip_title = true
 	_game = MAIN_SCENE.instantiate() as Game
 	get_tree().root.add_child(_game)
 	await _wait_physics(10)
@@ -77,11 +76,7 @@ func _tick() -> void:
 	else:
 		_weapon.set_firing(false)
 		_player.set_touch_firing(false)
-		var dest := GATE_POS
-		for i in range(ZONE_ZS.size()):
-			if not (_game._waves_triggered[i]):
-				dest = Vector3(0, 0, ZONE_ZS[i])
-				break
+		var dest: Vector3 = _game.bot_next_goal()
 		var to: Vector3 = dest - _player.global_position
 		to.y = 0.0
 		if to.length() < 1.0:
@@ -140,9 +135,9 @@ func _check_stalls() -> void:
 func _report_progress() -> void:
 	var alive := get_tree().get_nodes_in_group("enemies").filter(
 			func(e: Node) -> bool: return not (e as Enemy)._dead).size()
-	print("t=%d alive=%d player=%s trig=%s" % [
+	print("t=%d alive=%d player=%s %s" % [
 			_frames, alive, str(_player.global_position),
-			str(_game._waves_triggered)])
+			_game.progress_text()])
 func _wait_physics(n: int) -> void:
 	for i in range(n):
 		await get_tree().physics_frame

@@ -161,7 +161,10 @@ func _do_hitscan() -> void:
 			var headshot := false
 			if collider is Node3D:
 				var local: Vector3 = (collider as Node3D).to_local(end_pos)
-				headshot = local.y >= HEAD_MIN_Y and absf(local.x) <= HEAD_HALF_WIDTH
+				if collider.has_method("is_headshot"):
+					headshot = collider.call("is_headshot", local)
+				else:
+					headshot = local.y >= HEAD_MIN_Y and absf(local.x) <= HEAD_HALF_WIDTH
 			collider.call("take_damage", damage * (HEADSHOT_MULT if headshot else 1.0), headshot)
 			target_hit.emit(headshot)
 		_spawn_impact(end_pos, hit.get("normal", Vector3.UP))

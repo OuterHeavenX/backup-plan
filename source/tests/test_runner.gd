@@ -1,8 +1,6 @@
 extends Node
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const ENEMY_SCENE: PackedScene = preload("res://scenes/enemy.tscn")
-const ZONE_ZS: Array[float] = [-16.0, -34.0, -52.0]
-const GATE_Z: float = -64.5
 const PLAYER_SPAWN := Vector3(0, 0.5, 0)
 var _passed: int = 0
 var _failed: int = 0
@@ -15,6 +13,7 @@ func _ready() -> void:
 	_run_all.call_deferred()
 func _run_all() -> void:
 	print("--- FPS prototype headless tests ---")
+	Game.skip_title = true
 	_game = MAIN_SCENE.instantiate() as Game
 	get_tree().root.add_child(_game)
 	await _wait_physics(10)
@@ -489,33 +488,31 @@ func _test_enemy_ai() -> void:
 		_verdict("enemy_ai_engages", true)
 func _test_win_path() -> void:
 	_heal()
-	var zone_names := ["WaveZone1", "WaveZone2", "WaveZone3"]
-	for zi in range(ZONE_ZS.size()):
-		_player.global_position = Vector3(0, 1.0, ZONE_ZS[zi])
+	var n: int = _game.get_area_count()
+	for i in range(n):
+		_player.global_position = _game.area_entry_position(i) + Vector3(0, 1.0, 0)
 		_player.velocity = Vector3.ZERO
 		await _wait_physics(10)
-		var spawned := false
-		for i in range(300):
+		if _game.area_kind(i) == "collect":
+			_player.global_position = _game.key_position() + Vector3(0, 0.5, 0)
+			_player.velocity = Vector3.ZERO
+			await _wait_physics(10)
+		var done := false
+		for f in range(600):
 			await get_tree().physics_frame
-			if get_tree().get_nodes_in_group("enemies").size() > 0:
-				spawned = true
+			for e in get_tree().get_nodes_in_group("enemies"):
+				var en := e as Enemy
+				if en != null and not en._dead:
+					en.take_damage(9999.0)
+			_heal()
+			if _game.is_area_done(i) or _game.area_kind(i) == "reach":
+				done = true
 				break
-		if not spawned:
-			_verdict("win_path", false, "%s spawned no enemies" % zone_names[zi])
+		if not done:
+			_verdict("win_path", false, "area %d (%s) never completed" % [i, _game.area_kind(i)])
 			return
-		for e in get_tree().get_nodes_in_group("enemies"):
-			(e as Enemy).take_damage(9999.0)
-		var cleared := false
-		for i in range(300):
-			await get_tree().physics_frame
-			if get_tree().get_nodes_in_group("enemies").is_empty():
-				cleared = true
-				break
-		if not cleared:
-			_verdict("win_path", false, "%s wave did not clear" % zone_names[zi])
-			return
-		_heal()
-	_player.global_position = Vector3(0, 1.0, GATE_Z)
+	await _wait_physics(10)
+	_player.global_position = _game.gate_position() + Vector3(0, 1.0, 0)
 	_player.velocity = Vector3.ZERO
 	var win_screen := _hud.get_node("UI/WinScreen") as Control
 	var won := false
@@ -527,7 +524,7 @@ func _test_win_path() -> void:
 	if won:
 		_verdict("win_path", true)
 	else:
-		_verdict("win_path", false, "WinScreen never became visible after entering the exit gate")
+		_verdict("win_path", false, "WinScreen never became visible after entering the exit gate (%s)" % _game.progress_text())
 func _test_lose_path() -> void:
 	_game._game_over = false
 	_player._dead = false

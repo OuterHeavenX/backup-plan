@@ -10,41 +10,46 @@ changes to the build can be reviewed as a normal diff.
   instead of compiled binary tokens, so the files here are byte-for-byte
   what the game runs.
 - `tests/` — the headless test scenes shipped in the pck
-  (`res://tests/*.gd`). Run `res://tests/test_runner.tscn` for the 13
-  unit-style checks (`test_runner.gd` is shipped as plain text and now
-  includes the two-thumb regression test) and
+  (`res://tests/*.gd`, shipped as plain text). Run
+  `res://tests/test_runner.tscn` for the 13 unit-style checks and
   `res://tests/bot_playthrough.tscn` for a scripted bot that plays the whole
   level.
 
 ## How the game works
 
-- `game.gd` builds the level procedurally: a 78 m corridor with rubble,
-  pillars and torches, three wave-trigger zones (3 / 4 / 5 enemies) and an
-  exit gate that only completes the level once every wave has been cleared.
+- `game.gd` builds the level procedurally from the `AREAS` table: five named
+  areas with their own width, rubble, torches, story caption, objective and
+  encounter. The Breach (reach the road), Ash Road (clear it), The Cistern
+  (a wide chamber: find the gate key, which springs an ambush), The Narrows
+  (a tight passage: clear it, with a second group spawning behind you) and
+  The Gate (hold it, then reach the exit). Doors between areas lift when the
+  area's objective is done. It also tracks run stats (time, kills,
+  headshots, shots, hits, damage taken) for the score screens.
 - `player.gd` is a `CharacterBody3D` FPS controller (WASD + mouse, or the
-  touch joystick / look-drag on phones).
+  touch joystick / look-drag on phones) with touch aim assist while FIRE is
+  held.
 - `weapon.gd` is a hitscan rifle with a 30-round magazine and a finite
-  reserve (60 to start, topped up by glowing ammo packs on the corridor
-  floor and 40% drops from kills), tracers, impact sparks and a muzzle
-  flash. Hits above an enemy's shoulders on its centre line are headshots
+  reserve (60 to start, topped up by glowing ammo packs and 40% drops from
+  kills), pooled tracers and impact sparks, a muzzle flash, and headshots
   for double damage.
-- `enemy.gd` chases the player, winds up for 0.35 s inside 1.3 m (eyes flare,
-  head swells) and then strikes if the player is still within reach, flashes
-  on hit and fades out on death.
-- `hud.gd` draws health, ammo, the objective line, the story card, the
-  death / win screens and the touch controls.
-- `sfx.gd` synthesises every sound effect (gunshot, hit, growl, reload,
-  hurt) into `AudioStreamWAV` streams at startup, since the project ships no
-  audio assets, and plays them from small 2D / 3D player pools.
+- `enemy.gd` has two variants: the grunt and the faster, fragile, red-tinted
+  runner. Both path on the navmesh, wind up before striking (eyes flare,
+  head swells) and only land the hit if the player is still in reach.
+- `hud.gd` draws health, ammo, objective, area titles and story captions,
+  the title screen, the pause menu (ESC or the touch PAUSE button, with
+  sensitivity sliders saved to `user://settings.cfg`), the death / win
+  screens with run stats and best time, and the touch controls.
+- `sfx.gd` synthesises every sound effect into `AudioStreamWAV` streams at
+  startup, since the project ships no audio assets.
 
 Touch look deltas are computed from touch positions, never from
 `InputEventScreenDrag.relative`: Godot's web platform (4.7) fills `relative`
-from the wrong finger when two touches are down, which spun the camera
-whenever both thumbs were on the screen.
+from the wrong finger when two touches are down.
 
-Enemies navigate on a `NavigationMesh` that `game.gd` bakes at startup from
-the level's static colliders (the `nav_source` group), with a straight-line
-fallback while the map is not ready.
+The tests drive the level through `Game`'s small API (`get_area_count`,
+`area_entry_position`, `key_position`, `gate_position`, `bot_next_goal`,
+`progress_text`) and set `Game.skip_title = true` before instantiating the
+main scene.
 
 ## Porting the fixes back into the Godot project
 

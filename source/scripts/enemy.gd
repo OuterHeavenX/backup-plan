@@ -6,6 +6,10 @@ signal died(enemy: Enemy)
 @export var attack_range: float = 1.3
 @export var attack_damage: float = 10.0
 @export var attack_cooldown: float = 1.0
+# "grunt" (default) or "runner": fast, fragile, smaller, red with orange eyes.
+@export var variant: String = "grunt"
+var _head_min_y: float = 1.45
+var _head_half_width: float = 0.35
 # Attack telegraph: the enemy winds up (eyes flare, head swells) before it
 # strikes, and the strike only lands if the player is still in reach.
 @export var windup_time: float = 0.35
@@ -38,8 +42,10 @@ var _stuck_strikes: int = 0
 var _free_time: float = 0.0
 func _ready() -> void:
 	add_to_group("enemies")
+	wall_min_slide_angle = 0.0
 	_cooldown = randf() * 0.4
 	_collect_materials()
+	_apply_variant()
 	_agent = NavigationAgent3D.new()
 	_agent.name = "NavAgent"
 	_agent.radius = 0.5
@@ -68,6 +74,37 @@ func _collect_materials() -> void:
 		_orig_emission.append([m.emission_enabled, m.emission, m.emission_energy_multiplier])
 		if mi.name.begins_with("Eye"):
 			_eye_mats.append(m)
+func _apply_variant() -> void:
+	if variant != "runner":
+		return
+	speed = 5.5
+	hp = 30.0
+	attack_damage = 6.0
+	attack_cooldown = 0.7
+	windup_time = 0.25
+	var k := 0.8
+	_head_min_y = 1.45 * k
+	_head_half_width = 0.35 * k
+	for child in get_children():
+		var mi := child as MeshInstance3D
+		if mi != null:
+			mi.position *= k
+			mi.scale *= k
+	var cs := get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if cs != null and cs.shape is BoxShape3D:
+		var box := (cs.shape as BoxShape3D).duplicate() as BoxShape3D
+		box.size *= k
+		cs.shape = box
+		cs.position *= k
+	for i in range(_mats.size()):
+		var m: StandardMaterial3D = _mats[i]
+		if _eye_mats.has(m):
+			m.emission = Color(1.0, 0.45, 0.05)
+			_orig_emission[i][1] = m.emission
+		else:
+			m.albedo_color = Color(0.22, 0.06, 0.05)
+func is_headshot(local_pos: Vector3) -> bool:
+	return local_pos.y >= _head_min_y and absf(local_pos.x) <= _head_half_width
 func take_damage(amount: float, headshot: bool = false) -> void:
 	if _dead:
 		return
