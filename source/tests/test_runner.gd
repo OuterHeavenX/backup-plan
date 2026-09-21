@@ -39,6 +39,8 @@ func _run_all() -> void:
 	await _test_fire_jiggle_while_walking()
 	await _test_touch_identifier_hardening()
 	await _test_two_thumb_relative_ignored()
+	await _test_dash()
+	await _test_weapon_switch()
 	await _test_enemy_ai()
 	await _test_win_path()
 	await _test_lose_path()
@@ -103,11 +105,11 @@ func _test_story_dismiss() -> void:
 	var mb := InputEventMouseButton.new()
 	mb.button_index = MOUSE_BUTTON_LEFT
 	mb.pressed = true
-	Input.parse_input_event(mb)
+	# Delivered straight to the HUD: the web export does not route
+	# Input.parse_input_event() into _input callbacks.
+	_hud._input(mb)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
-	mb.pressed = false
-	Input.parse_input_event(mb)
 	var ok := false
 	for i in range(120):
 		await get_tree().physics_frame
@@ -450,6 +452,37 @@ func _test_two_thumb_relative_ignored() -> void:
 				"two-thumb drags spun the camera (dyaw=%.3f, expected %.3f)" % [yaw, expected])
 	else:
 		_verdict("two_thumb_relative_ignored", true)
+func _test_dash() -> void:
+	_reset_player()
+	_heal()
+	await _wait_physics(5)
+	# Earlier touch tests may have double-tapped the joystick (which dashes);
+	# clear the cooldown so this test is isolated.
+	_player._dash_cd = 0.0
+	_player._dash_left = 0.0
+	var p0: Vector3 = _player.global_position
+	_player.dash()
+	var dash_left_after: float = _player._dash_left
+	await _wait_physics(12)
+	var moved: float = p0.z - _player.global_position.z
+	if moved > 1.6:
+		_verdict("dash", true)
+	else:
+		_verdict("dash", false, "dash moved only %.2f m forward in 12 frames (disp=%s dash_left_after_call=%.2f cd=%.2f locked=%s dead=%s touch_move=%s)" % [moved, str(_player.global_position - p0), dash_left_after, _player._dash_cd, str(_player._hud_input_locked()), str(_player._dead), str(_player.touch_move)])
+func _test_weapon_switch() -> void:
+	_weapon.switch_weapon("shotgun")
+	var ok_a: bool = _weapon.kind == "shotgun" and _weapon.mag_size == 6 and _weapon.weapon_label() == "SHOTGUN"
+	_weapon.mag = 3
+	_weapon.switch_weapon("rifle")
+	var ok_b: bool = _weapon.kind == "rifle" and _weapon.mag_size == 30
+	_weapon.switch_weapon("shotgun")
+	var ok_c: bool = _weapon.mag == 3
+	_weapon.switch_weapon("rifle")
+	_weapon.mag = _weapon.mag_size
+	if ok_a and ok_b and ok_c:
+		_verdict("weapon_switch", true)
+	else:
+		_verdict("weapon_switch", false, "switch state wrong (a=%s b=%s c=%s)" % [str(ok_a), str(ok_b), str(ok_c)])
 func _test_enemy_ai() -> void:
 	_reset_player()
 	_heal()

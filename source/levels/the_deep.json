@@ -1,0 +1,57 @@
+{
+	"name": "The Deep",
+	"story": "Below the gate the old works go down into the dark. Whatever came through the wall came from here.",
+	"gate_z": -120,
+	"areas": [
+		{
+			"name": "The Sump", "z0": 0, "z1": -20, "hw": 3.0,
+			"story": "", "objective": "Descend into the works", "kind": "reach",
+			"spawns": [], "late_spawns": [], "late_delay": 0,
+			"ammo": [[0, 0.35, -8]], "health": [],
+			"rubble": [[[1.2, 5.0, 1.2], [2.6, 2.5, -12]], [[1.0, 0.8, 1.0], [-2.6, 0.4, -16]]],
+			"torches": [[[-2.9, 2.6, -10], 1.5708]],
+			"door": false
+		},
+		{
+			"name": "Drowned Hall", "z0": -20, "z1": -52, "hw": 7.0,
+			"story": "A flooded hall. They nest in the dark corners.", "objective": "Clear the hall", "kind": "clear",
+			"spawns": [["runner", [-4.0, 0, -34]], ["runner", [4.0, 0, -34]], ["grunt", [-2.0, 0, -44]], ["grunt", [2.0, 0, -44]]],
+			"late_spawns": [["runner", [-2.0, 0, -17]], ["runner", [2.0, 0, -17]]], "late_delay": 4.0,
+			"ammo": [[0, 0.35, -30]], "health": [[0, 0.35, -24]],
+			"rubble": [[[1.2, 5.0, 1.2], [-3.5, 2.5, -36]], [[1.2, 5.0, 1.2], [3.5, 2.5, -36]], [[1.8, 1.2, 1.8], [-5.5, 0.6, -28]], [[1.6, 1.4, 1.6], [5.5, 0.7, -44]]],
+			"torches": [[[-6.9, 2.6, -26], 1.5708], [[6.9, 2.6, -46], -1.5708]],
+			"door": true
+		},
+		{
+			"name": "The Vault", "z0": -52, "z1": -76, "hw": 5.0,
+			"story": "The vault. The lower gate key was kept here.", "objective": "Find the vault key", "kind": "collect",
+			"spawns": [],
+			"late_spawns": [["runner", [-2.0, 0, -56]], ["runner", [2.0, 0, -56]], ["runner", [0.0, 0, -58]], ["grunt", [0.0, 0, -60]]], "late_delay": 0,
+			"ammo": [[0, 0.35, -55]], "health": [[0, 0.35, -62]],
+			"rubble": [[[1.4, 1.2, 1.4], [3.5, 0.6, -60]], [[1.2, 1.0, 1.2], [-4.2, 0.5, -58]], [[1.2, 5.0, 1.2], [4.4, 2.5, -70]]],
+			"torches": [[[4.9, 2.6, -56], -1.5708], [[-4.9, 2.6, -66], 1.5708]],
+			"door": true,
+			"key": [-4.0, 0.6, -70]
+		},
+		{
+			"name": "Collapsed Stair", "z0": -76, "z1": -100, "hw": 3.0,
+			"story": "The stair has come down. Push through.", "objective": "Climb the collapsed stair", "kind": "clear",
+			"spawns": [["grunt", [0.0, 0, -90]], ["runner", [-1.0, 0, -95]], ["runner", [1.0, 0, -95]], ["grunt", [0.0, 0, -97]]],
+			"late_spawns": [["runner", [0.0, 0, -73]]], "late_delay": 2.5,
+			"ammo": [[0, 0.35, -79]], "health": [[0, 0.35, -84]],
+			"rubble": [[[1.0, 0.9, 1.0], [2.5, 0.45, -88]], [[1.0, 0.9, 1.0], [-2.5, 0.45, -94]]],
+			"torches": [[[2.9, 2.6, -82], -1.5708]],
+			"door": true
+		},
+		{
+			"name": "The Furnace", "z0": -100, "z1": -124, "hw": 5.0,
+			"story": "The furnace. It is waiting for you.", "objective": "Destroy the furnace guardian", "kind": "clear",
+			"spawns": [["brute", [0.0, 0, -114]], ["grunt", [-2.5, 0, -110]], ["grunt", [2.5, 0, -110]], ["runner", [-1.5, 0, -118]], ["runner", [1.5, 0, -118]]],
+			"late_spawns": [["runner", [-1.5, 0, -98]], ["runner", [1.5, 0, -98]]], "late_delay": 6.0,
+			"ammo": [[0, 0.35, -103]], "health": [[0, 0.35, -106]],
+			"rubble": [[[1.4, 1.2, 1.4], [-4.0, 0.6, -108]], [[1.4, 1.2, 1.4], [4.0, 0.6, -112]]],
+			"torches": [[[-4.9, 2.6, -104], 1.5708], [[4.9, 2.6, -116], -1.5708]],
+			"door": true
+		}
+	]
+}

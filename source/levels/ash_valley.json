@@ -1,0 +1,57 @@
+{
+	"name": "Ash Valley",
+	"story": "The wall has fallen. Ash chokes the valley — and the gate ahead is the only way through.",
+	"gate_z": -120,
+	"areas": [
+		{
+			"name": "The Breach", "z0": 0, "z1": -22, "hw": 4.0,
+			"story": "", "objective": "Follow the ash road to the pass", "kind": "reach",
+			"spawns": [], "late_spawns": [], "late_delay": 0,
+			"ammo": [[0, 0.35, -9]], "health": [],
+			"rubble": [[[1.6, 1.5, 1.6], [2.0, 0.75, -14]], [[1.2, 5.0, 1.2], [-3.2, 2.5, -8]]],
+			"torches": [[[-3.9, 2.6, -12], 1.5708]],
+			"door": false
+		},
+		{
+			"name": "Ash Road", "z0": -22, "z1": -50, "hw": 4.0,
+			"story": "Something moves in the ash. Clear the road.", "objective": "Clear the road", "kind": "clear",
+			"spawns": [["grunt", [-2.0, 0, -33]], ["grunt", [2.0, 0, -33]], ["runner", [-1.0, 0, -40]], ["runner", [1.0, 0, -42]]],
+			"late_spawns": [], "late_delay": 0,
+			"ammo": [[0, 0.35, -25]], "health": [[0, 0.35, -36]],
+			"rubble": [[[1.2, 1.0, 1.2], [-2.2, 0.5, -30]], [[2.0, 2.2, 1.0], [-1.8, 1.1, -40]], [[1.4, 1.3, 1.4], [2.0, 0.65, -45]]],
+			"torches": [[[3.9, 2.6, -36], -1.5708]],
+			"door": true
+		},
+		{
+			"name": "The Cistern", "z0": -50, "z1": -78, "hw": 8.0,
+			"story": "The old cistern. The key to the gate should be here somewhere.", "objective": "Find the gate key", "kind": "collect",
+			"spawns": [],
+			"late_spawns": [["runner", [-3.0, 0, -56]], ["runner", [3.0, 0, -56]], ["runner", [0.0, 0, -60]]], "late_delay": 0,
+			"ammo": [[0, 0.35, -53]], "health": [[0, 0.35, -62]],
+			"rubble": [[[1.2, 5.0, 1.2], [-3.0, 2.5, -72]], [[1.2, 5.0, 1.2], [3.0, 2.5, -72]], [[1.6, 1.4, 1.6], [-5.0, 0.7, -58]], [[1.4, 1.2, 1.4], [-4.5, 0.6, -74]], [[2.2, 0.9, 1.0], [-6.5, 0.45, -64]]],
+			"torches": [[[-7.9, 2.6, -58], 1.5708], [[7.9, 2.6, -70], -1.5708]],
+			"door": true,
+			"key": [6.5, 0.6, -70]
+		},
+		{
+			"name": "The Narrows", "z0": -78, "z1": -102, "hw": 2.5,
+			"story": "The narrows. They will come from both sides.", "objective": "Push through the narrows", "kind": "clear",
+			"spawns": [["grunt", [0.0, 0, -92]], ["runner", [-1.0, 0, -96]], ["runner", [1.0, 0, -96]]],
+			"late_spawns": [["grunt", [0.0, 0, -75]], ["runner", [1.5, 0, -74]]], "late_delay": 3.0,
+			"ammo": [[0, 0.35, -81]], "health": [[0, 0.35, -86]],
+			"rubble": [[[1.0, 0.9, 1.0], [2.0, 0.45, -90]]],
+			"torches": [[[-2.4, 2.6, -88], 1.5708]],
+			"door": true
+		},
+		{
+			"name": "The Gate", "z0": -102, "z1": -124, "hw": 4.0,
+			"story": "The gate. Something big guards it. Hold until the way is clear.", "objective": "Hold the gate", "kind": "clear",
+			"spawns": [["grunt", [-2.0, 0, -110]], ["grunt", [2.0, 0, -110]], ["brute", [0.0, 0, -115]], ["runner", [-1.5, 0, -117]], ["runner", [1.5, 0, -117]]],
+			"late_spawns": [], "late_delay": 0,
+			"ammo": [[0, 0.35, -105]], "health": [[0, 0.35, -107.5]],
+			"rubble": [[[1.2, 1.0, 1.2], [-3.4, 0.5, -108]]],
+			"torches": [[[-3.9, 2.6, -106], 1.5708], [[3.9, 2.6, -114], -1.5708]],
+			"door": true
+		}
+	]
+}

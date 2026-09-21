@@ -15,6 +15,23 @@ func _ready() -> void:
 func _run() -> void:
 	print("--- bot playthrough ---")
 	Game.skip_title = true
+	var overall := "WIN"
+	for li in range(Game.LEVELS.size()):
+		Game.level_index = li
+		Game.story_shown = li > 0
+		Game.resume_area = -1
+		var result: String = await _run_level()
+		print("LEVEL %d (%s): %s" % [li, Game.LEVELS[li]["id"], result])
+		if result != "WIN":
+			overall = result
+			break
+	print("RESULT: " + overall)
+	get_tree().quit(0 if overall == "WIN" else 1)
+func _run_level() -> String:
+	_kills = 0
+	_frames = 0
+	_stall_frames = 0
+	_last_enemy_pos = {}
 	_game = MAIN_SCENE.instantiate() as Game
 	get_tree().root.add_child(_game)
 	await _wait_physics(10)
@@ -24,8 +41,7 @@ func _run() -> void:
 		_weapon = _player.get_node_or_null("Head/Camera3D/WeaponMount/Weapon") as Weapon
 	if _player == null or _hud == null or _weapon == null:
 		print("SETUP FAIL")
-		get_tree().quit(1)
-		return
+		return "SETUP FAIL"
 	_hud._input(_mk_tap(Vector2(400, 200)))
 	await _wait_physics(5)
 	var _last_alive := 0
@@ -52,8 +68,11 @@ func _run() -> void:
 			_report_progress()
 		_check_stalls()
 	print("kills=%d frames=%d" % [_kills, _frames])
-	print("RESULT: " + result)
-	get_tree().quit(0 if result == "WIN" else 1)
+	_game.queue_free()
+	# The win / death screens pause the tree; unpause for the next level.
+	get_tree().paused = false
+	await _wait_physics(5)
+	return result
 func _tick() -> void:
 	var enemies := get_tree().get_nodes_in_group("enemies").filter(
 			func(e: Node) -> bool: return not (e as Enemy)._dead)
@@ -127,7 +146,7 @@ func _check_stalls() -> void:
 			var pd: float = Vector2(
 					p.x - _player.global_position.x,
 					p.z - _player.global_position.z).length()
-			if d < 0.05 and pd > 2.5:
+			if d < 0.02 and pd > 2.5:
 				_stall_frames += 1
 				if _stall_frames == 600:
 					print("STALL? enemy id=%d pos=%s dist_to_player=%.1f (600f)" % [key, str(p), pd])

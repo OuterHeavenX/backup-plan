@@ -9,38 +9,45 @@ changes to the build can be reviewed as a normal diff.
   (`res://scripts/*.gd`). The pck now carries them as plain-text GDScript
   instead of compiled binary tokens, so the files here are byte-for-byte
   what the game runs.
+- `levels/` — the level data files shipped in the pck.
 - `tests/` — the headless test scenes shipped in the pck
   (`res://tests/*.gd`, shipped as plain text). Run
-  `res://tests/test_runner.tscn` for the 13 unit-style checks and
+  `res://tests/test_runner.tscn` for the 15 unit-style checks and
   `res://tests/bot_playthrough.tscn` for a scripted bot that plays the whole
   level.
 
 ## How the game works
 
-- `game.gd` builds the level procedurally from the `AREAS` table: five named
-  areas with their own width, rubble, torches, story caption, objective and
-  encounter. The Breach (reach the road), Ash Road (clear it), The Cistern
-  (a wide chamber: find the gate key, which springs an ambush), The Narrows
-  (a tight passage: clear it, with a second group spawning behind you) and
-  The Gate (hold it, then reach the exit). Doors between areas lift when the
-  area's objective is done. It also tracks run stats (time, kills,
-  headshots, shots, hits, damage taken) for the score screens.
+- Levels are JSON files in `levels/` (`ash_valley.json`, `the_deep.json`):
+  a corridor of named areas, each with its own width, rubble, torches,
+  story caption, objective (`reach`, `clear` or `collect`) and encounter,
+  plus ammo and health pickups. `game.gd` builds the geometry, doors,
+  triggers, navmesh and pickups from that table, runs the progression,
+  tracks run stats, and handles checkpoints (death offers a retry from the
+  start of the current area with the ammo you had on entry), difficulty
+  (enemy HP / damage and drop rates) and level select.
 - `player.gd` is a `CharacterBody3D` FPS controller (WASD + mouse, or the
-  touch joystick / look-drag on phones) with touch aim assist while FIRE is
-  held.
-- `weapon.gd` is a hitscan rifle with a 30-round magazine and a finite
-  reserve (60 to start, topped up by glowing ammo packs and 40% drops from
-  kills), pooled tracers and impact sparks, a muzzle flash, and headshots
-  for double damage.
-- `enemy.gd` has two variants: the grunt and the faster, fragile, red-tinted
-  runner. Both path on the navmesh, wind up before striking (eyes flare,
-  head swells) and only land the hit if the player is still in reach.
-- `hud.gd` draws health, ammo, objective, area titles and story captions,
-  the title screen, the pause menu (ESC or the touch PAUSE button, with
-  sensitivity sliders saved to `user://settings.cfg`), the death / win
-  screens with run stats and best time, and the touch controls.
-- `sfx.gd` synthesises every sound effect into `AudioStreamWAV` streams at
-  startup, since the project ships no audio assets.
+  touch joystick / look-drag on phones) with a dash (Shift, or double-tap
+  the joystick / DASH button), touch aim assist while FIRE is held, camera
+  recoil and shake, footsteps and haptics.
+- `weapon.gd` holds two weapons, a rifle and a shotgun (keys 1 / 2 or the
+  SWAP button), each with its own magazine and reserve, pooled tracers,
+  impact sparks (`GPUParticles3D`) and headshots for double damage.
+- `enemy.gd` has three variants: grunt, runner (fast, fragile, small) and
+  brute (slow, huge, its slam shakes the camera). All path on the navmesh,
+  bob and lean while moving, wind up before striking (eyes flare, head
+  swells, spikes flick out) and stagger on headshots.
+- `hud.gd` draws health, ammo, objective, area titles and story captions, a
+  damage vignette and low-health pulse, the title screen (level and
+  difficulty selectors), the pause menu (ESC, the touch PAUSE button, or
+  losing window focus) with sensitivity sliders saved to
+  `user://settings.cfg`, the death / win screens with run stats, best times
+  per level and difficulty, checkpoint retry and next level, and the touch
+  controls, positioned inside the display safe area.
+- `sfx.gd` synthesises every sound (weapons, hits, growls, footsteps, a wind
+  loop and a music drone) into `AudioStreamWAV` streams at startup, since
+  the project ships no audio assets. Replace the entries of `_streams` with
+  loaded files to use real audio.
 
 Touch look deltas are computed from touch positions, never from
 `InputEventScreenDrag.relative`: Godot's web platform (4.7) fills `relative`
@@ -49,10 +56,19 @@ from the wrong finger when two touches are down.
 The tests drive the level through `Game`'s small API (`get_area_count`,
 `area_entry_position`, `key_position`, `gate_position`, `bot_next_goal`,
 `progress_text`) and set `Game.skip_title = true` before instantiating the
-main scene.
+main scene. The bot plays every level in `Game.LEVELS` in one run.
+
+## Continuous integration
+
+`.github/workflows/test.yml` runs `tools/run_ci.sh` on every push and pull
+request: it builds test variants of the web export whose main scene is the
+test runner / the bot (`tools/pck_tools.py`), runs them in headless Chromium
+(`tools/web_harness.mjs`, Playwright) and fails unless every test passes and
+the bot wins every level.
 
 ## Porting the fixes back into the Godot project
 
-Copy `scripts/*.gd` over the matching files in the editor project and
-re-export. The scenes (`player.tscn`, `enemy.tscn`, `hud.tscn`, `main.tscn`)
-and `project.godot` were not changed.
+Copy `scripts/*.gd`, `tests/*.gd` and `levels/*.json` over the matching
+files in the editor project (create a `levels/` folder) and re-export. The
+scenes (`player.tscn`, `enemy.tscn`, `hud.tscn`, `main.tscn`) and
+`project.godot` were not changed.
